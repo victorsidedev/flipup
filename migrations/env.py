@@ -11,6 +11,8 @@ from models.purchase import Purchase
 from models.item import Item
 from models.sale import Sale
 from models.refund import Refund
+from models.sale_expense import SaleExpense
+from models.sale_item import SaleItem
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
