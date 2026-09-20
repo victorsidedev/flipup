@@ -1,12 +1,15 @@
+from collections import defaultdict
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from models.purchase import Purchase
 from models.item import Item
 from models.sale import Sale
+from models.sale_item import SaleItem
+from models.sale_expense import SaleExpense
 from models.refund import Refund
-from schemas.sale import SaleResponse
-from services.item_status import find_sale_source
+from schemas.sale import SaleResponse, SaleItemResponse, SaleExpenseResponse
 from schemas.purchase import (
     CreatePurchaseRequest,
     SavePurchaseRequest,
@@ -17,35 +20,60 @@ from schemas.purchase import (
 
 
 def get_sales_by_item(db: Session) -> dict[int, SaleResponse]:
-    return {
-        sale.item_id: SaleResponse(
-            id=sale.id, itemId=sale.item_id, price=sale.price,
-            kind=sale.kind, soldAt=sale.sold_at,
-        )
+    active_sales = {
+        sale.id: sale
         for sale in db.query(Sale).filter(
             ~db.query(Refund).filter(Refund.sale_id == Sale.id).exists()
         )
     }
 
+    items_by_sale = defaultdict(list)
+    for sale_item in db.query(SaleItem).filter(SaleItem.sale_id.in_(active_sales)):
+        items_by_sale[sale_item.sale_id].append(
+            SaleItemResponse(itemId=sale_item.item_id, allocatedPrice=sale_item.allocated_price)
+        )
+
+    expenses_by_sale = defaultdict(list)
+    for expense in db.query(SaleExpense).filter(SaleExpense.sale_id.in_(active_sales)):
+        expenses_by_sale[expense.sale_id].append(
+            SaleExpenseResponse(
+                id=expense.id,
+                type=expense.type,
+                amount=expense.amount,
+                description=expense.description,
+                itemId=expense.item_id,
+            )
+        )
+
+    by_item = {}
+    for sale in active_sales.values():
+        response = SaleResponse(
+            id=sale.id,
+            kind=sale.kind,
+            soldAt=sale.sold_at,
+            price=sale.price,
+            items=items_by_sale[sale.id],
+            expenses=expenses_by_sale[sale.id],
+        )
+        for sale_item in items_by_sale[sale.id]:
+            by_item[sale_item.itemId] = response
+    return by_item
+
 
 def build_purchase_response(
     purchase: Purchase, sales: dict[int, SaleResponse]
 ) -> PurchaseWithItemsResponse:
-    by_id = {item.id: item for item in purchase.items}
     items = []
     for item in purchase.items:
-        sale_source = find_sale_source(item.id, by_id, sales)
-        direct_sale = sales.get(item.id)
-        status = "sold" if direct_sale else "included" if sale_source is not None else "available"
+        sale = sales.get(item.id)
         items.append(ItemResponse(
             id=item.id,
             name=item.name,
             price=item.price,
             parentId=item.parent_item_id,
             purchaseId=item.purchase_id,
-            sale=direct_sale,
-            status=status,
-            soldWithItemId=sale_source if status == "included" else None,
+            sale=sale,
+            status="sold" if sale else "available",
         ))
     return PurchaseWithItemsResponse(
         purchase=PurchaseResponse(
@@ -55,6 +83,7 @@ def build_purchase_response(
         ),
         items=items,
     )
+
 
 
 def get_purchases(db: Session) -> list[PurchaseWithItemsResponse]:
@@ -127,7 +156,7 @@ def update_purchase(db: Session, purchase_id: int, request: SavePurchaseRequest)
                 ancestor = parent
                 while ancestor is not None and ancestor.itemId is None:
                     ancestor = by_id.get(ancestor.parentId)
-                if ancestor is not None and find_sale_source(ancestor.itemId, existing, sales) is not None:
+                if ancestor is not None and ancestor.itemId in sales:
                     raise HTTPException(status_code=409, detail="Cannot add parts to an item that is already sold")
         purchase.source = request.purchase.source
         purchase.purchased_date = request.purchase.purchaseDate

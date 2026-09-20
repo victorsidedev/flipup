@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from models.item import Item
 from models.purchase import Purchase
-from models.sale import Sale
+from models.sale_item import SaleItem
 from services.purchase_service import get_purchase
 
 
@@ -25,7 +25,7 @@ def subtree_ids(db: Session, item: Item) -> set[int]:
 
 
 def remove_items(db: Session, item_ids: set[int]):
-    if db.query(Sale.id).filter(Sale.item_id.in_(item_ids)).first() is not None:
+    if db.query(SaleItem.item_id).filter(SaleItem.item_id.in_(item_ids)).first() is not None:
         raise HTTPException(status_code=409, detail="Items with sales history cannot be deleted")
     db.execute(delete(Item).where(Item.id.in_(item_ids)))
 

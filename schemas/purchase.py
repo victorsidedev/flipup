@@ -18,8 +18,7 @@ class ItemResponse(BaseModel):
     parentId: int | None
     purchaseId: int
     sale: SaleResponse | None = None
-    status: Literal["available", "sold", "included"] = "available"
-    soldWithItemId: int | None = None
+    status: Literal["available", "sold"] = "available"
 
 class PurchaseWithItemsResponse(BaseModel):
     purchase: PurchaseResponse
