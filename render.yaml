@@ -9,3 +9,5 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: CORS_ALLOW_ORIGINS
+        value: https://flipup-frontend.onrender.com
