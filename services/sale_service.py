@@ -60,6 +60,8 @@ def create_sale(db: Session, request: CreateSaleRequest) -> PurchaseWithItemsRes
                 allocated_price=allocated_prices.get(item_id),
             ))
 
+        db.flush()
+
         for expense in request.expenses:
             db.add(SaleExpense(
                 sale_id=sale.id,
