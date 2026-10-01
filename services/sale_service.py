@@ -27,13 +27,12 @@ def create_sale(db: Session, request: CreateSaleRequest) -> PurchaseWithItemsRes
             raise HTTPException(status_code=404, detail=f"Item not found: {sorted(missing)[0]}")
 
         purchase_ids = {item.purchase_id for item in items.values()}
-        if len(purchase_ids) > 1:
-            raise HTTPException(status_code=422, detail="Sale items must belong to the same purchase")
-        purchase_id = next(iter(purchase_ids))
+        # Keep the existing response shape, anchored to the first requested item.
+        purchase_id = items[requested_ids[0]].purchase_id
 
         purchase_items = {
             candidate.id: candidate
-            for candidate in db.query(Item).filter(Item.purchase_id == purchase_id)
+            for candidate in db.query(Item).filter(Item.purchase_id.in_(purchase_ids))
         }
         expanded_ids = collect_subtree_ids(set(requested_ids), purchase_items)
 
@@ -78,4 +77,3 @@ def create_sale(db: Session, request: CreateSaleRequest) -> PurchaseWithItemsRes
 
     # Return the same computed inventory representation as GET /purchases.
     return get_purchase(db, purchase_id)
-

@@ -28,13 +28,25 @@ An item's direct active sale takes precedence. A parent sale covers remaining
 nested parts without creating extra financial rows. Earlier child sales remain
 intact. Ancestors are resolved within each purchase with cycle protection.
 
-`POST /sales` accepts `{ "itemId": 1, "price": "100.00", "kind": "sale" }`
+`POST /sales` accepts
+`{ "items": [{ "itemId": 1 }, { "itemId": 7 }], "price": "100.00", "kind": "sale" }`.
+Items may belong to different purchases and different parents. Purchase IDs are
+inferred from the item IDs; clients do not submit purchase IDs. Each selected
+item includes its descendants, with overlapping selections counted only once
+in `sale_items`. All selected items form one sale with one total price. Each
+request item may optionally specify `allocatedPrice`; `expenses` may contain
+payment or shipping fees. Missing items (404) or already sold items anywhere in
+the expanded selection (409) reject the entire sale atomically.
+
 (`kind` may be omitted). An optional `soldDate` in `YYYY-MM-DD` format records
 an explicitly selected sale date in the existing `sold_at` column at midnight,
 without timezone conversion. If omitted, the database timestamp defaults to now.
 The Mark sold dialog defaults this date to the user's local today.
-Returns 201 and the updated purchase. Its direct `sale`
-contains `id`, `itemId`, `price`, `kind`, and `soldAt`.
+Returns 201 and the updated purchase containing the **first requested item**,
+preserving the existing response shape. Fetch `GET /purchases` to refresh every
+affected purchase after a cross-purchase sale or refund. The item's `sale`
+contains `id`, `items`, `expenses`, `price`, `kind`, and `soldAt`; its `items`
+list includes all items in the sale across purchases.
 
 `POST /sales/{sale_id}/refund` needs no body and returns 201 with the same updated
 purchase shape. It inserts one credit note for the sale's entire price. Missing
